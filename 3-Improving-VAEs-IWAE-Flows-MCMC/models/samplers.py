@@ -78,7 +78,7 @@ class HMC(nn.Module):
         grad = torch.autograd.grad(s.sum(), z)[0]
         return grad
 
-    def run_chain(self, z_init, target, x, n_steps=100, return_trace=False):
+    def run_chain(self, z_init, target, x, n_steps=100, return_trace=False, burnin=0):
         samples = z_init
         if not return_trace:
             for _ in range(n_steps):
@@ -86,7 +86,8 @@ class HMC(nn.Module):
             return samples
         else:
             final = torch.tensor([], device=self.one.device, dtype=torch.float32)
-            for _ in range(n_steps):
+            for i in range(burnin + n_steps):
                 samples = self.make_transition(z_old=samples, target=target, x=x)[0]
-                final = torch.cat([final, samples])
+                if i >= burnin:
+                    final = torch.cat([final, samples])
             return final

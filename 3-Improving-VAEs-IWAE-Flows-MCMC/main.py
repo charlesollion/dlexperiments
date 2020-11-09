@@ -10,10 +10,9 @@ from models import VAE, IWAE, VAE_with_flows, VAE_MCMC
 
 def get_activations():
     return {
-        "relu": torch.nn.ReLU(),
-        "leakyrelu": torch.nn.LeakyReLU(),
-        "tanh": torch.nn.Tanh(),
-        "log_softmax": torch.nn.LogSoftmax(dim=-1),
+        "relu": torch.nn.ReLU,
+        "leakyrelu": torch.nn.LeakyReLU,
+        "tanh": torch.nn.Tanh,
     }
 
 
@@ -53,12 +52,12 @@ if __name__ == '__main__':
     parser.add_argument("--hidden_dim", default=2, type=int)
     parser.add_argument("--need_permute", default=False, type=bool)
     parser.add_argument("--n_leapfrogs", default=5, type=int)
-    parser.add_argument("--step_size", default=0.1, type=float)
+    parser.add_argument("--step_size", default=0.05, type=float)
     parser.add_argument("--use_barker", default=True, type=bool)
 
     parser.add_argument("--num_samples", default=1, type=int)
-    parser.add_argument("--num_flows", default=20, type=int)
-    parser.add_argument("--act_func", default="tanh", choices=["relu", "leakyrelu", "tanh", "log_softmax"])
+    parser.add_argument("--num_flows", default=5, type=int)
+    parser.add_argument("--act_func", default="tanh", choices=["relu", "leakyrelu", "tanh"])
     act_func = get_activations()
 
     parser.add_argument("--dataset", default='fashionmnist', choices=['mnist', 'fashionmnist'])
@@ -84,6 +83,6 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
-    trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, deterministic=True, max_epochs=50)
+    trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, deterministic=True, max_epochs=150)
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
     trainer.save_checkpoint(f"./checkpoints/{args.model}_{args.flow_type}.ckpt")
