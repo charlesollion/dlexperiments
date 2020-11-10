@@ -86,4 +86,4 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, deterministic=True, max_epochs=150)
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
-    trainer.save_checkpoint(f"./checkpoints/{args.model}_{args.flow_type}.ckpt")
+    trainer.save_checkpoint(f"./checkpoints/{args.model}_{args.flow_type}_{args.hidden_dim}.ckpt")

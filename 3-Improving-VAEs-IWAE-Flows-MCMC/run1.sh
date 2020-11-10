@@ -1,0 +1,1 @@
+python main.py --model VAE_with_flows --num_samples 1 --need_permute False --num_flows 2 --flow_type IAF
