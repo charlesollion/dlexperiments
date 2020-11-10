@@ -5,21 +5,19 @@ import torch.nn.functional as F
 from sklearn.manifold import TSNE
 from tqdm.auto import tqdm
 
-from models.samplers import HMC
-
 
 def plot_digit_samples(original, reconstucted, generated):
     """
     Plot samples from the generative network in a grid
     """
 
-    grid_h = 8
-    grid_w = 8
+    grid_h = 2
+    grid_w = 5
     data_h = 28
     data_w = 28
     data_c = 1
     plt.close()
-    fig, ax = plt.subplots(ncols=3)
+    fig, ax = plt.subplots(ncols=3, figsize=(7, 4), dpi=200)
     images_list = [original, reconstucted, generated]
     names = ['original', 'reconstructed', 'generated']
     for pos in range(3):
@@ -87,35 +85,36 @@ def plot_posterior(data, names=None):
     plt.show()
 
 
-def sample_distr(model, batch, sampler):
+def sample_distr(model, batch):
     with torch.no_grad():
-        mu, _ = model.encode(batch.view(-1, 784))
+        mu, logvar = model.encode(batch)
+        z = model.reparameterize(mu, logvar)
         if hasattr(model, "Flow"):
-            mu = model.Flow(mu)[0]
-        z_transformed = sampler.run_chain(z_init=mu.detach(), target=model.joint_density(), x=batch, n_steps=200,
-                                          return_trace=True, burnin=100)
-        mu = z_transformed.view((200, -1, mu.shape[-1])).mean(0)
-        scale = 1.2 * z_transformed.view((200, -1, mu.shape[-1])).std(0)
-    return mu, scale
+            z_transformed, log_jac = model.Flow(z)
+        else:
+            z_transformed = z
+            log_jac = torch.zeros_like(z_transformed[:, 0])
+        Q_logprob = torch.distributions.Normal(loc=mu, scale=torch.exp(0.5 * logvar)).log_prob(z).sum(-1) - log_jac
+
+    return z_transformed, Q_logprob
 
 
-def estimate_ll(model, dataset, S=1000):
-    model.eval()
-    mean_nll = []
-    sampler = HMC(n_leapfrogs=5, step_size=0.005, use_barker=True).to(model.device)
-    with torch.no_grad():
-        for batch, _ in tqdm(dataset):
-            batch = batch.to(model.device)
-            mu, scale = sample_distr(model, batch, sampler)
-            Q = torch.distributions.Normal(loc=mu, scale=scale)
-            P = torch.distributions.Normal(loc=torch.zeros_like(mu), scale=torch.ones_like(scale))
-            z = Q.sample((S,))
-            x_hat = model.decode(z)
-            BCE = F.binary_cross_entropy_with_logits(x_hat, batch.view(-1, 784).repeat(S, 1).view((S, -1, 784)),
-                                                     reduction='none').view(
-                (S, -1, 784)).mean(0).sum(-1)
-            current_nll = torch.logsumexp(
-                -BCE + P.log_prob(z).mean(0).sum(-1) - Q.log_prob(z).mean(0).sum(-1), dim=0) - torch.log(
-                torch.tensor(S, dtype=torch.float32, device=model.device))
-            mean_nll.append(current_nll.cpu().item())
-    return mean_nll
+def estimate_ll(model, dataset, S=5000, n_runs=3):
+    final_nll = []
+    for i in range(n_runs):
+        model.eval()
+        mean_nll = []
+        with torch.no_grad():
+            for batch, _ in tqdm(dataset):
+                batch = batch.view(-1, 784).repeat(S, 1).to(model.device)
+                z, Q_logprob = sample_distr(model, batch)
+                P = torch.distributions.Normal(loc=torch.zeros_like(z), scale=torch.ones_like(z))
+                x_hat = model.decode(z)
+                BCE = F.binary_cross_entropy_with_logits(x_hat, batch,
+                                                         reduction='none')
+                current_nll = torch.logsumexp(
+                    -BCE.sum(-1).view((S, -1)) + P.log_prob(z).sum(-1).view((S, -1)) - Q_logprob.view((S, -1)),
+                    dim=0).mean() - torch.log(torch.tensor(S, dtype=torch.float32, device=model.device))
+                mean_nll.append(-current_nll.cpu().item())
+        final_nll.append(np.mean(mean_nll))
+    return final_nll

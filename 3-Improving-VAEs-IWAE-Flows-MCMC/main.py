@@ -16,8 +16,7 @@ def get_activations():
     }
 
 
-def make_dataloaders(dataset, gpus, batch_size, val_batch_size):
-    kwargs = {'num_workers': 20, 'pin_memory': True} if gpus else {}
+def make_dataloaders(dataset, gpus, batch_size, val_batch_size, **kwargs):
     if dataset == 'mnist':
         train_loader = torch.utils.data.DataLoader(
             datasets.MNIST('./data', train=True, download=True,
@@ -65,10 +64,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.gpus = 1
 
+    kwargs = {'num_workers': 20, 'pin_memory': True} if args.gpus else {}
     train_loader, val_loader = make_dataloaders(dataset=args.dataset,
                                                 gpus=args.gpus,
                                                 batch_size=args.batch_size,
-                                                val_batch_size=args.val_batch_size)
+                                                val_batch_size=args.val_batch_size,
+                                                **kwargs)
     if args.model == "VAE":
         model = VAE(act_func=act_func[args.act_func], num_samples=args.num_samples, hidden_dim=args.hidden_dim)
     elif args.model == "IWAE":

@@ -11,30 +11,33 @@ from models.samplers import HMC
 class Base(pl.LightningModule):
     def __init__(self, act_func, num_samples, hidden_dim, name="VAE"):
         super(Base, self).__init__()
-        # Encoder
         self.hidden_dim = hidden_dim
+        # Define Encoder part
         self.encoder_net = nn.Sequential(
             nn.Linear(784, 400),
             act_func(),
             nn.Linear(400, 2 * hidden_dim)
         )
-        # Decoder
+        # # Define Decoder part
         self.decoder_net = nn.Sequential(
             nn.Linear(hidden_dim, 400),
             act_func(),
             nn.Linear(400, 784)
         )
+        # Number of latent samples per object
         self.num_samples = num_samples
         # Fixed random vector, which we recover each epoch
         self.random_z = torch.randn((64, hidden_dim), dtype=torch.float32)
-
+        # Name, which is used for logging
         self.name = name
 
     def encode(self, x):
+        # We treat the first half of output as mu, and the rest as logvar
         h = self.encoder_net(x)
         return h[:, :h.shape[1] // 2], h[:, h.shape[1] // 2:]
 
     def reparameterize(self, mu, logvar):
+        # Reparametrization trick
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
@@ -46,6 +49,7 @@ class Base(pl.LightningModule):
         return self.decode(z)
 
     def joint_density(self, ):
+        # Defines joint density (in fact, this is useful only for VAE with MCMC)
         def density(z, x):
             x_reconst = self(z)
             log_Pr = torch.distributions.Normal(loc=torch.tensor(0., device=z.device, dtype=torch.float32),
@@ -56,6 +60,7 @@ class Base(pl.LightningModule):
         return density
 
     def validation_epoch_end(self, outputs):
+        # Some stuff, which is needed for logging and tensorboard
         val_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
         val_BCE = torch.stack([x['BCE'] for x in outputs]).mean()
 
@@ -189,6 +194,17 @@ class VAE_MCMC(Base):
             x_hat = self(z_transformed)
             loss, BCE = self.loss_function(x_hat, x, mu, logvar)
         return {"loss": loss, "BCE": BCE}
+
+    def step(self, batch):
+        x, _ = batch
+        x = x.repeat(self.num_samples, 1, 1, 1)
+        mu, logvar = self.encode(x.view(-1, 784))
+        z = self.reparameterize(mu, logvar)
+        z_transformed = self.sampler.run_chain(z_init=z.detach(), target=self.joint_density(), x=x, n_steps=10)
+        x_hat = self(z_transformed)
+        loss, BCE = self.loss_function(x_hat, x, mu, logvar)
+
+        return loss, x_hat, z_transformed, BCE
 
     def validation_step(self, batch, batch_idx):
         x, _ = batch
