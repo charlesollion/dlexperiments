@@ -111,7 +111,7 @@ class IWAE(Base):
         log_Pr = torch.sum((-0.5 * z ** 2).view((self.num_samples, -1, self.hidden_dim)), -1)
         BCE = F.binary_cross_entropy_with_logits(recon_x, x.view(-1, 784), reduction='none').view(
             (self.num_samples, -1, 784)).sum(-1)
-        log_weight = log_Pr + BCE - log_Q
+        log_weight = log_Pr - BCE - log_Q
         log_weight = log_weight - torch.max(log_weight, 0)[0]  # for stability
         weight = torch.exp(log_weight)
         weight = weight / torch.sum(weight, 0)
