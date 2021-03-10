@@ -11,16 +11,14 @@ class VanillaVAE(nn.Module):
     '''
     Vanilla VAE. Kept as simple as possible
     '''
-    def __init__(self, latent_dim, activation = "relu", hidden_dim = 256, output_dim = 784, archi="basic", data_type="binary", split=True):
+    def __init__(self, latent_dim, activation = "relu", num_hidden=1, hidden_dim = 256, output_dim = 784, data_type="binary", split=True, archi="basic"):
         super().__init__()
         if archi == "basic":
-            self.net = SimpleNN(latent_dim, activation, hidden_dim, output_dim, large=False, split=split)
-        elif archi == "large":
-            self.net = SimpleNN(latent_dim, activation, hidden_dim, output_dim, large=True, split=split)
+            self.net = SimpleNN(latent_dim, activation, num_hidden, hidden_dim, output_dim, split=split)
         elif archi == "convCifar":
             self.net = ConvNN(latent_dim, activation, hidden_dim, split=split)
         elif archi == "convMnist":
-            self.net = ConvNN(latent_dim, activation, hidden_dim, image_size = (28,28), channel_num=1, num_layers=2, split=split)
+            self.net = ConvNN(latent_dim, activation, hidden_dim, channel_num=1)
         else:
             raise ValueError("Architecture unknown: " + str(archi))
         self.latent_dim = latent_dim
@@ -141,14 +139,16 @@ class VectorQuantizedVAE(VanillaVAE):
     K: codebook size (number of discrete values)
     gumbel: if True, uses a gumbel softmax instead of the straight through operator
     """
-    def __init__(self, latent_dim, K=10, gumbel=False, tau=1., beta=1., activation="relu", hidden_dim = 256, output_dim = 784, archi="basic", data_type="binary"):
-        super().__init__(latent_dim, activation, hidden_dim, output_dim, archi, data_type, split=False)
+    def __init__(self, latent_dim, K=10, gumbel=False, tau=1., beta=1., alpha=1., normalize=False, activation="relu", num_hidden=1, hidden_dim = 256, output_dim = 784, archi="basic", data_type="binary"):
+        super().__init__(latent_dim, activation, num_hidden, hidden_dim, output_dim, data_type=data_type, split=False, archi=archi)
         self.description = f"vq-vae K={K}"
         self.gumbel = gumbel
         self.beta = beta
+        self.alpha = alpha
         self.tau = tau
+        self.spatial = True if archi=="convMnist" else False
         if gumbel:
-            self.codebook = VQEmbeddingGumbel(K, latent_dim, self.tau)
+            self.codebook = VQEmbeddingGumbel(K, latent_dim, self.tau, spatial=self.spatial)
         else:
             self.codebook = VQEmbedding(K, latent_dim)
 
@@ -161,6 +161,8 @@ class VectorQuantizedVAE(VanillaVAE):
 
     def decode(self, latents):
         z_q_x = self.codebook.embedding(latents)
+        if self.spatial:
+            z_q_x = z_q_x.permute(0, 3, 1, 2)
         x_tilde = self.net.decode(z_q_x)
         return x_tilde
 
@@ -185,7 +187,7 @@ class VectorQuantizedVAE(VanillaVAE):
             loss_vq = - F.cosine_similarity(z_q_x, z_e_x.detach()).mean()
             # Commitment objective
             loss_commit = - F.cosine_similarity(z_e_x, z_q_x.detach()).mean()
-            loss = loss_recons + loss_vq + self.beta * loss_commit
+            loss = loss_recons + self.alpha * loss_vq + self.beta * loss_commit
         else:
             # Vector quantization objective
             loss_vq = F.mse_loss(z_q_x, z_e_x.detach())

@@ -93,27 +93,34 @@ class VQEmbedding(nn.Module):
 
 class VQEmbeddingGumbel(nn.Module):
     # Simple Gumbel Softmax to get indices of embedding
-    def __init__(self, K, D, tau, normalize=False):
+    def __init__(self, K, D, tau, normalize=False, spatial=False):
         super().__init__()
         self.embedding = nn.Embedding(K, D)
         self.tau = tau
-        self.normalize = False
+        self.normalize = normalize
+        self.spatial = spatial
 
     def straight_through(self, z_e_x):
         if self.normalize:
             # Cosine similarity instead of dot product
             self.embedding.weight.data = F.normalize(self.embedding.weight, p=2, dim=1)
-            z_e_x = F.normalize(z_e_x, p=2, dim=1)
+            z_e_x = F.normalize(z_e_x, p=2, dim=-1)
+        if self.spatial:
+            z_e_x = z_e_x.permute(0, 2, 3, 1).contiguous()
         sims = torch.matmul(z_e_x, self.embedding.weight.T)
         hard = F.gumbel_softmax(sims, tau=self.tau, dim=-1, hard=True)
         z_q_x = torch.matmul(hard, self.embedding.weight)
+        if self.spatial:
+            z_q_x = z_q_x.permute(0, 3, 1, 2).contiguous()
         return z_q_x, z_q_x
 
     def forward(self, z_e_x):
         if self.normalize:
             # Cosine similarity instead of dot product
             self.embedding.weight.data = F.normalize(self.embedding.weight, p=2, dim=1)
-            z_e_x = F.normalize(z_e_x, p=2, dim=1)
+            z_e_x = F.normalize(z_e_x, p=2, dim=-1)
+        if self.spatial:
+            z_e_x = z_e_x.permute(0, 2, 3, 1).contiguous()
         sims = torch.matmul(z_e_x, self.embedding.weight.T)
         hard = F.gumbel_softmax(sims, tau=self.tau, dim=-1, hard=True)
-        return torch.argmax(hard,dim=-1)
+        return torch.argmax(hard, dim=-1)

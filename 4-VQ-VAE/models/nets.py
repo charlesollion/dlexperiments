@@ -3,6 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
+activations = {
+    'relu': nn.ReLU(),
+    'sigmoid': nn.Sigmoid(),
+    'tanh': nn.Tanh(),
+    'softplus': nn.Softplus(),
+    'leaky_relu': nn.LeakyReLU(),
+}
+
+
 class NeuralNet(nn.Module):
     '''
     Encoder and decoder networks
@@ -12,18 +22,6 @@ class NeuralNet(nn.Module):
         self.latent_dim = latent_dim
         self.hidden_dim = hidden_dim
 
-        if activation == "relu":
-            self.act = F.relu
-        elif activation == "softplus":
-            self.act = F.softplus
-        elif activation == "leaky_relu":
-            self.act = F.leaky_relu
-        elif activation == "tanh":
-            self.act = torch.tanh
-        else:
-            raise ValueError(activation)
-
-
     def encode(self, x):
         return x
 
@@ -32,35 +30,37 @@ class NeuralNet(nn.Module):
         return z
 
 
-
 class SimpleNN(NeuralNet):
-    def __init__(self, latent_dim, activation = "relu", hidden_dim = 256, output_dim = 784, large=False, split=True):
+    def __init__(self, latent_dim, activation = "relu", num_hidden=1, hidden_dim = 256, output_dim = 784, split=True):
         super().__init__(latent_dim, activation, hidden_dim)
         self.output_dim = output_dim
         self.split = split
 
-        # Encoder
-        self.l1_enc = nn.Linear(output_dim, hidden_dim)
-        self.l2_enc = nn.Linear(hidden_dim, 2 * latent_dim if self.split else latent_dim)
+        latent_enc_dim = 2 * latent_dim if self.split else latent_dim
+        if num_hidden == 0:
+            self.layers_enc = [nn.Linear(output_dim, latent_enc_dim)]
+            self.layers_dec = [nn.Linear(latent_dim, output_dim)]
+        else:
+            self.layers_enc = [nn.Linear(output_dim, hidden_dim)]
+            self.layers_enc += [activations[activation]]
+            if num_hidden > 1:
+                self.layers_enc += [nn.Linear(hidden_dim, hidden_dim) for i in range(num_hidden-1)]
+                self.layers_enc += [activations[activation]]
+            self.layers_enc += [nn.Linear(hidden_dim, latent_enc_dim)]
 
-        # Decoder
-        self.l1_dec = nn.Linear(latent_dim, hidden_dim)
-        self.l2_dec = nn.Linear(hidden_dim, output_dim)
+            self.layers_dec = [nn.Linear(latent_dim, hidden_dim)]
+            self.layers_dec += [activations[activation]]
+            if num_hidden > 1:
+                self.layers_dec += [nn.Linear(hidden_dim, hidden_dim) for i in range(num_hidden-1)]
+                self.layers_dec += [activations[activation]]
+            self.layers_dec += [nn.Linear(hidden_dim, output_dim)]
 
-        # if "large" network, add an extra hidden layer
-        self.extra_hidden_layer = large
-
-        if large:
-            self.lh_dec = nn.Linear(hidden_dim, hidden_dim)
-            self.lh_enc = nn.Linear(hidden_dim, hidden_dim)
+        self.encoder = nn.Sequential(*self.layers_enc)
+        self.decoder = nn.Sequential(*self.layers_dec)
 
 
     def encode(self, x):
-        # Split mu and logvar
-        h = self.act(self.l1_enc(x))
-        if self.extra_hidden_layer:
-            h = self.act(self.lh_enc(h))
-        h = self.l2_enc(h)
+        h = self.encoder(x)
         if self.split:
             return torch.split(h, self.latent_dim, -1)
         else:
@@ -68,15 +68,37 @@ class SimpleNN(NeuralNet):
 
 
     def decode(self, z):
-        h = self.act(self.l1_dec(z))
-        if self.extra_hidden_layer:
-            h = self.act(self.lh_dec(h))
-        x = self.l2_dec(h)
-        return x
-
+        return self.decoder(z)
 
 
 class ConvNN(NeuralNet):
+    def __init__(self, latent_dim, activation = "relu", hidden_dim = 128, channel_num=1, split=False):
+        super().__init__(latent_dim, activation, hidden_dim)
+        self.channel_num = channel_num
+        self.split = split
+        self.encoder = nn.Sequential(
+            nn.Conv2d(channel_num, hidden_dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.Conv2d(hidden_dim, latent_dim, 4, 2, 1)
+        )
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(latent_dim, hidden_dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(hidden_dim, channel_num, 4, 2, 1),
+        )
+
+    def encode(self, x):
+        h = self.encoder(x)
+        if self.split:
+            return torch.split(h, self.latent_dim, -1)
+        else:
+            return h
+
+    def decode(self, z):
+        return self.decoder(z)
+
+
+class ConvNNOld(NeuralNet):
     def __init__(self, latent_dim, activation = "relu", hidden_dim = 128, image_size = (32,32), channel_num=3, num_layers=3):
         super().__init__(latent_dim, activation, hidden_dim)
         self.image_size = image_size
