@@ -32,32 +32,40 @@ class BurgersDataset():
         self.x_f_data = random.uniform(key2, (self.N_f, 1)) * 2.0 - 1.0
 
 
-    def border_batch(self):
-        bstart = self.curr_idx * self.batch_size
-        bend = (self.curr_idx + 1) * self.batch_size
+    def border_batch(self, key):
+        bstart = self.curr_idx
+        bend = bstart + self.batch_size
         if bend >= self.N_u:
             bend = self.N_u-1
             self.curr_idx = 0
+            key1, key2, key3 = random.split(key, 3)
+            self.t_data = random.permutation(key1, self.t_data, independent=True)
+            self.x_data = random.permutation(key2, self.x_data, independent=True)
+            self.u_data = random.permutation(key3, self.u_data, independent=True)
         else:
-            self.curr_idx = self.curr_idx + 1
-        x_ = self.x_data[bstart:bend]
+            self.curr_idx = self.curr_idx + self.batch_size
         t_ = self.t_data[bstart:bend]
+        x_ = self.x_data[bstart:bend]
         u_ = self.u_data[bstart:bend]
         return t_, x_, u_
 
 
-    def inside_batch(self):
+    def inside_batch(self, key):
         bstart = self.curr_f_idx
         bend = bstart + self.batch_f_size
         if bend >= self.N_f:
             bend = self.N_f-1
             self.curr_f_idx = 0
+            key1, key2 = random.split(key, 2)
+            self.t_f_data = random.permutation(key1, self.t_f_data, independent=True)
+            self.x_f_data = random.permutation(key2, self.x_f_data, independent=True)
         else:
             self.curr_f_idx = self.curr_f_idx + self.batch_f_size
         t_b = self.t_f_data[bstart:bend]
         x_b = self.x_f_data[bstart:bend]
 
         return t_b, x_b
+
 
 
 class KPPDataset(BurgersDataset):
@@ -68,8 +76,8 @@ class KPPDataset(BurgersDataset):
     def generate_data(self, key):
         # Generate border data
         key, subkey = random.split(key)
-        #data_type = random.uniform(key, (self.N_u, 1))>0.5
-        data_type = np.ones((self.N_u, 1))
+        data_type = random.uniform(key, (self.N_u, 1))>0.5
+        #data_type = np.ones((self.N_u, 1))
         key, subkey1, subkey2, subkey3, subkey4, subkey5 = random.split(key, 6)
         x_data_t0 = data_type * (random.uniform(subkey1, (self.N_u, 2)))
         border_dim = random.uniform(subkey2, (self.N_u, 1))>0.5
