@@ -38,10 +38,10 @@ class BurgersDataset():
         if bend >= self.N_u:
             bend = self.N_u-1
             self.curr_idx = 0
-            key1, key2, key3 = random.split(key, 3)
-            self.t_data = random.permutation(key1, self.t_data, independent=True)
-            self.x_data = random.permutation(key2, self.x_data, independent=True)
-            self.u_data = random.permutation(key3, self.u_data, independent=True)
+            idxs = random.permutation(key, np.arange(0, self.N_u))
+            self.t_data = self.t_data[idxs]
+            self.x_data = self.x_data[idxs]
+            self.u_data = self.u_data[idxs]
         else:
             self.curr_idx = self.curr_idx + self.batch_size
         t_ = self.t_data[bstart:bend]
@@ -56,9 +56,9 @@ class BurgersDataset():
         if bend >= self.N_f:
             bend = self.N_f-1
             self.curr_f_idx = 0
-            key1, key2 = random.split(key, 2)
-            self.t_f_data = random.permutation(key1, self.t_f_data, independent=True)
-            self.x_f_data = random.permutation(key2, self.x_f_data, independent=True)
+            idxs = random.permutation(key, np.arange(0, self.N_f))
+            self.t_f_data = self.t_f_data[idxs]
+            self.x_f_data = self.x_f_data[idxs]
         else:
             self.curr_f_idx = self.curr_f_idx + self.batch_f_size
         t_b = self.t_f_data[bstart:bend]
@@ -75,10 +75,10 @@ class KPPDataset(BurgersDataset):
 
     def generate_data(self, key):
         # Generate border data
-        key, subkey = random.split(key)
-        data_type = random.uniform(key, (self.N_u, 1))>0.5
+        key, subkey1, subkey2 = random.split(key, 3)
+        data_type = random.uniform(subkey1, (self.N_u, 1))>0.5
         #data_type = np.ones((self.N_u, 1))
-        key, subkey1, subkey2, subkey3, subkey4, subkey5 = random.split(key, 6)
+        key, subkey1, subkey2, subkey3, subkey4, subkey5 = random.split(subkey2, 6)
         x_data_t0 = data_type * (random.uniform(subkey1, (self.N_u, 2)))
         border_dim = random.uniform(subkey2, (self.N_u, 1))>0.5
         border_sign = random.uniform(subkey4, (self.N_u, 1))>0.5
