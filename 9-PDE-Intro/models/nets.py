@@ -1,3 +1,4 @@
+from turtle import shape
 import jax.numpy as np
 import jax
 from jax import grad, jit, vmap, jacfwd, jacrev
@@ -14,9 +15,12 @@ class MLP(nn.Module):
         self.layers = [nn.Dense(feat) for feat in self.features]
 
     def __call__(self, t, x):
-        h = np.concatenate((t,x))
+        input = np.concatenate((t,x))
+        final_output = 0 # Initialisation
         for i, layer in enumerate(self.layers):
-            h = layer(h)
+            output = layer(input)
             if i != len(self.layers) - 1:
-                h = nn.tanh(h)
-        return h
+                input = nn.tanh(output)
+            else:
+                final_output = output
+        return final_output
