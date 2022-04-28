@@ -20,7 +20,7 @@ class MLP(nn.Module):
         for i, layer in enumerate(self.layers):
             output = layer(input)
             if i != len(self.layers) - 1:
-                input = nn.tanh(output)
+                input = nn.relu(output)
             else:
                 final_output = output
         return final_output
