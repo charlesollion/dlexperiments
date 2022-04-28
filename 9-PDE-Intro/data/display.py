@@ -49,6 +49,7 @@ def display_KPP_at_times(batched_u, resolution=30, times=[0.0,]):
             #outp = u0(row)
             map_out.append(np.expand_dims(outp, axis=-1))
         map_out = np.hstack(map_out)
+        print(np.max(map_out))
         plt.imshow(map_out, vmin=-0.05, vmax=1.0)
         plt.xticks([x*resolution/5 for x in range(5)], [round(i/5.0, 2) for i in range(5)])
         plt.yticks([x*resolution/5 for x in range(5)], [round(i/5.0, 2) for i in range(5)])
