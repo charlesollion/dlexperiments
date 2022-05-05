@@ -19,8 +19,8 @@ class MLP(nn.Module):
         input = np.concatenate((t,x))
         final_output = 0 # Initialisation
         for i, (layer1, layer2) in enumerate(zip(self.layers_m1, self.layers_m2)):
-            x1 = layer1(x)
-            x2 = layer2(x)
+            x1 = layer1(input)
+            x2 = layer2(input)
             output = (1. - t) * x1 + t * x2
             if i != len(self.layers_m1) - 1:
                 input = nn.relu(output)
